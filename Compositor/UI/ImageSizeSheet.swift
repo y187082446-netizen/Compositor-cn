@@ -105,7 +105,7 @@ struct ImageSizeSheet: View {
     @ViewBuilder private var sheet: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Image Size").font(.title2.bold())
-            Text("Current: \(document.width) × \(document.height) pixels").foregroundStyle(.secondary)
+            Text(verbatim: localizedAppFormat("Current: %@ × %@ pixels", String(document.width), String(document.height))).foregroundStyle(.secondary)
             Picker("Units", selection: $unit) {
                 ForEach(units.filter { resample || ($0 != "Pixels" && $0 != "Percent") }, id: \.self) { Text($0) }
             }
@@ -147,7 +147,7 @@ struct ImageSizeSheet: View {
             }
             if resample {
                 Picker("Sampling", selection: $sampling) {
-                    ForEach(LayerSampling.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(LayerSampling.allCases, id: \.self) { Text(localizedKey($0.rawValue)).tag($0) }
                 }
                 Text("Resizes layer pixels and applies existing transforms. Undo restores the originals.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -155,7 +155,9 @@ struct ImageSizeSheet: View {
                 Text("Only print dimensions and resolution change. Pixels stay unchanged.")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            Text(valid ? "Result: \(Int(width.rounded())) × \(Int(height.rounded())) pixels" : "Use 1–\(DocumentLimits.maxSide.formatted()) pixels per side, up to \(DocumentLimits.maxSurfaceMegapixels) megapixels, and 1–9,600 pixels/inch.")
+            Text(verbatim: valid
+                 ? localizedAppFormat("Result: %@ × %@ pixels", String(Int(width.rounded())), String(Int(height.rounded())))
+                 : localizedAppFormat("Use 1–%@ pixels per side, up to %@ megapixels, and 1–9,600 pixels/inch.", DocumentLimits.maxSide.formatted(), String(DocumentLimits.maxSurfaceMegapixels)))
                 .foregroundStyle(valid ? Color.secondary : Color.orange).font(.callout)
             HStack {
                 Button("Cancel") { finish(nil) }.configuredNativeShortcut(.escape)

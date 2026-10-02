@@ -4,10 +4,27 @@ import Sparkle
 @main
 struct CompositorApp: App {
     @NSApplicationDelegateAdaptor(CompositorApplicationDelegate.self) private var applicationDelegate
+    @AppStorage("compositor.language") private var languageCode = AppLanguage.chinese.rawValue
+    @AppStorage("compositor.didChooseLanguage") private var didChooseLanguage = false
+    @State private var showsLanguagePicker = false
     private var session: EditorSession { applicationDelegate.session }
     var body: some Scene {
         Window("Compositor", id: "editor") {
-            ProjectWorkspaceView(applicationDelegate: applicationDelegate).roundedControls()
+            ProjectWorkspaceView(applicationDelegate: applicationDelegate)
+                .roundedControls()
+                .environment(\.locale, Locale(identifier: languageCode))
+                .environment(\.layoutDirection, languageCode == AppLanguage.arabic.rawValue ? .rightToLeft : .leftToRight)
+                .sheet(isPresented: $showsLanguagePicker) {
+                    LanguagePickerView(selection: $languageCode) {
+                        didChooseLanguage = true
+                        savePreferredLanguage()
+                        showsLanguagePicker = false
+                    }
+                    .interactiveDismissDisabled(!didChooseLanguage)
+                }
+                .onAppear {
+                    if !didChooseLanguage { showsLanguagePicker = true }
+                }
         }
             .defaultSize(width: 1180, height: 780)
             // Files opened from Finder or dropped on the Dock icon go to the app delegate, which imports them into
@@ -20,6 +37,8 @@ struct CompositorApp: App {
             }
             // The project's name is already on its tab, so the toolbar doesn't repeat it as a window title.
             .windowToolbarStyle(.unifiedCompact(showsTitle: false))
+            .environment(\.locale, Locale(identifier: languageCode))
+            .environment(\.layoutDirection, languageCode == AppLanguage.arabic.rawValue ? .rightToLeft : .leftToRight)
             .commands {
                 CommandGroup(replacing: .undoRedo) {
                     // Dialog text fields keep native text undo; document history
@@ -94,6 +113,21 @@ struct CompositorApp: App {
                 Group {
                     CommandGroup(after: .appInfo) {
                         Button("Check for Updates…") { applicationDelegate.updater.checkForUpdates(nil) }
+                        Menu(AppLanguage(rawValue: languageCode)?.menuTitle ?? "Language") {
+                            ForEach(AppLanguage.allCases) { language in
+                                Button {
+                                    languageCode = language.rawValue
+                                    didChooseLanguage = true
+                                    savePreferredLanguage()
+                                } label: {
+                                    if language.rawValue == languageCode {
+                                        Label(language.nativeName, systemImage: "checkmark")
+                                    } else {
+                                        Text(language.nativeName)
+                                    }
+                                }
+                            }
+                        }
                     }
                     CommandGroup(after: .toolbar) {
                         // With a dialog's preview open (Export JPEG), these zoom that preview rather than the canvas.
@@ -257,7 +291,7 @@ struct CompositorApp: App {
                     Button("Hue/Saturation…") { session.beginHueSaturation() }
                         .configuredKeyboardShortcut("u").disabled(!session.canAdjustColors)
                     ForEach([FilterKind.blackWhite, .colorBalance, .exposure, .gradientMap, .grain], id: \.self) { kind in
-                        Button("\(kind.rawValue)…") { session.beginFilter(kind) }
+                        Button(localizedKey("\(kind.rawValue)…")) { session.beginFilter(kind) }
                             .disabled(!session.canAdjustColors || session.hueSaturation != nil)
                     }
                     Button(session.isMaskSelected ? "Invert Mask" : "Invert") { Task { await session.invertPixels() } }
@@ -282,14 +316,14 @@ struct CompositorApp: App {
                 }
                 CommandMenu("Filter") {
                     ForEach(FilterKind.allCases.filter { $0 != .contentAwareFill && !$0.isImageAdjustment }, id: \.self) { kind in
-                        Button("\(kind.rawValue)…") { session.beginFilter(kind) }
+                        Button(localizedKey("\(kind.rawValue)…")) { session.beginFilter(kind) }
                             .disabled(!(kind == .vignette ? session.canVignette : session.canAdjustColors) || session.hueSaturation != nil)
                     }
                 }
                 CommandMenu("Layer") {
                     Menu("New Adjustment Layer") {
                         ForEach(AdjustmentKind.allCases, id: \.self) { kind in
-                            Button(kind.rawValue + (kind.isEditable ? "…" : "")) { session.addAdjustment(kind) }
+                            Button(localizedKey(kind.rawValue + (kind.isEditable ? "…" : ""))) { session.addAdjustment(kind) }
                         }
                     }.disabled(!session.canEditLayers || session.document == nil)
                     Button("Edit Adjustment…") {
@@ -335,11 +369,15 @@ struct CompositorApp: App {
                             .disabled(!session.canTransform)
                     }
                     Divider()
-                    Button(session.selectedEffect != nil ? "Delete " + session.selectedEffect!.kind.rawValue : session.isMaskSelected && session.activeLayer?.mask != nil ? "Delete Layer Mask" : session.selectedLayerIDs.count > 1 ? "Delete Layers" : "Delete Layer") {
+                    Button(localizedKey(session.selectedEffect.map { "Delete \($0.kind.rawValue)" } ?? (session.isMaskSelected && session.activeLayer?.mask != nil ? "Delete Layer Mask" : session.selectedLayerIDs.count > 1 ? "Delete Layers" : "Delete Layer"))) {
                         session.deleteLayerOrMask()
                     }
                         .disabled(!session.canEditLayers || session.activeLayer == nil)
                 }
             }
+    }
+
+    private func savePreferredLanguage() {
+        UserDefaults.standard.set([languageCode], forKey: "AppleLanguages")
     }
 }
